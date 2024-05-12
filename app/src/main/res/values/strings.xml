@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Quick cart</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="nav_header_title">Quick Cart</string>
+    <string name="nav_header_subtitle">Учетная запись</string>
+    <string name="nav_header_desc">Navigation header</string>
+
+    <string name="menu_home">Локальный список</string>
+    <string name="menu_gallery">Онлайн список</string>
+    <string name="menu_slideshow">Список 3</string>
+    <string name="menu_delete">удалить купленные</string>
+    <string name="action_sync">синхронзировать</string>
+    <string name="add_list">Добавить новый список +</string>
+
+</resources>
