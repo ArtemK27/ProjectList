@@ -54,7 +54,7 @@ public class MainViewModel extends ViewModel {
 
     public void updateNote(Note note) {
         // Обновите заметку в базе данных
-        App.getInstance().getNoteDao().update(note);
+        repo.update(note);
     }
 
 
@@ -69,4 +69,6 @@ public class MainViewModel extends ViewModel {
 
         databaseExecutor.shutdown();
     }
+
+
 }

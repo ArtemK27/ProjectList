@@ -29,6 +29,7 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
 
     private SortedList<Note> sortedList;
     private OnItemLongClickListener mListener;
+    ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
     public Adapter() {
         sortedList = new SortedList<>(Note.class, new SortedList.Callback<Note>() {
             @Override
@@ -119,12 +120,23 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
 
     public void setItems(List<Note> notes) {
         sortedList.replaceAll(notes);
+
+    }
+    public void updateItem(int pos, Note note ) {
+        sortedList.updateItemAt(pos, note);
+
+        databaseExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                App.getInstance().getNoteDao().update(note);
+
+            }
+        });
     }
 
-    static class NoteViewHolder extends RecyclerView.ViewHolder {
+    class NoteViewHolder extends RecyclerView.ViewHolder {
         TextView noteText, noteAmount;
         Note note;
-        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
 
         public NoteViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -148,7 +160,7 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
                     });
                     updateStrokeOut();
                     //-----------------------------------------------------
-                    // НЕТ ЗАКРЫТИЯ ПОТОКА
+                    // НЕТ ЗАКРЫТИЯ ПОТОКА, ну и ладно че
 
 
                 }

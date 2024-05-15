@@ -6,6 +6,7 @@ import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Transaction;
 import androidx.room.Update;
 
 import com.example.projectlist.model.Group;
@@ -46,8 +47,10 @@ public interface NoteDao {
     List<Note> getClickatedNotes();
     @Query("UPDATE Note SET update_flag = NULL")
     void clearClickatedNotes();
+
     @Update
     void update(Note note);
+
 
     @Delete
     void delete(Note note);

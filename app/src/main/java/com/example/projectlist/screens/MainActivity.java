@@ -1,6 +1,8 @@
 package com.example.projectlist.screens;
 
 import android.app.Dialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
@@ -31,7 +33,6 @@ import com.example.projectlist.R;
 import com.example.projectlist.data.NoteDao;
 import com.example.projectlist.model.Group;
 import com.example.projectlist.model.Note;
-import com.example.projectlist.ui.home.HomeFragment;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -88,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
     FloatingActionButton floatingActionButton;
     private Note note;
     private MainViewModel mainViewModel;
+    Adapter adapter;
     ImageView imageView;
     Dialog dialog;
     TextView addList;
@@ -119,9 +121,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-
-//        View fragment = findViewById(R.id.nav_host_fragment_content_main);
-
         listViewNames = findViewById(R.id.names_list);
 
         NavigationView navView = findViewById(R.id.nav_view);
@@ -144,17 +143,6 @@ public class MainActivity extends AppCompatActivity {
 
         DrawerLayout drawer = binding.drawerLayout;
         NavigationView navigationView = binding.navView;
-
-        // Passing each menu ID as a set of Ids because each
-        // menu should be considered as top level destinations.
-
-//        mAppBarConfiguration = new AppBarConfiguration.Builder()
-//                .setOpenableLayout(drawer)
-//                .build();
-//        NavController navController = new NavController(getApplicationContext());
-//        NavigationUI.setupActionBarWithNavController(this, navController, mAppBarConfiguration);
-//        NavigationUI.setupWithNavController(navigationView, navController);
-
 
         toolbar = findViewById(R.id.toolbar);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
@@ -222,7 +210,10 @@ public class MainActivity extends AppCompatActivity {
                                     }
 
                                     if (id == R.id.action_show_id) {
-                                        Toast.makeText(MainActivity.this, String.valueOf(groupAdapter.getGroupId(position)), Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(MainActivity.this, "Скопировано в буфер обмена", Toast.LENGTH_SHORT).show();
+                                        ClipboardManager clipboard = (ClipboardManager) MainActivity.this.getSystemService(Context.CLIPBOARD_SERVICE);
+                                        ClipData clip = ClipData.newPlainText("", String.valueOf(groupAdapter.getGroupId(position)) );
+                                        clipboard.setPrimaryClip(clip);
                                         return true;
                                     }
 
@@ -238,7 +229,7 @@ public class MainActivity extends AppCompatActivity {
 
                     Log.d("HANDLERSEND", "get sending");
 
-                    Adapter adapter = new Adapter();
+                    adapter = new Adapter();
                     final RecyclerView recyclerView = findViewById(R.id.main_list);
 
                     LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getApplicationContext(), RecyclerView.VERTICAL, false);
@@ -253,6 +244,7 @@ public class MainActivity extends AppCompatActivity {
                     liveNotes.observe(MainActivity.this, new Observer<List<Note>>() {
                         @Override
                         public void onChanged(List<Note> notes) {
+//                            adapter.setItems(null);
                             adapter.setItems(notes);
                         }
                     });
@@ -290,7 +282,7 @@ public class MainActivity extends AppCompatActivity {
                                         return true;
                                     }
                                     if(id == R.id.action_edit_item) {
-                                        showDialog(tmp);
+                                        showDialog(tmp, position);
                                         return true;
                                     }
 
@@ -412,53 +404,7 @@ public class MainActivity extends AppCompatActivity {
 
                 }
                 if(id == R.id.action_sync){
-                    Log.d(TAG, "sync begin");
-
-                    Set<String> idsGroup = namesGroupDB.keySet();
-                    String[] ids = idsGroup.toArray(new String[0]);
-
-                    for(String idGroup : ids) {
-                        cloud_database
-                            .collection("Notes")
-                            .document("groups")
-                            .collection(idGroup)
-                            .get()
-                            .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
-                                @Override
-                                public void onComplete(@NonNull Task<QuerySnapshot> task) {
-                                    ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-                                    databaseExecutor.execute(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            NoteDao repo = App.getInstance().getNoteDao();
-                                            if (task.isSuccessful()) {
-                                                repo.clearSync();
-                                                for (QueryDocumentSnapshot document : task.getResult()) {
-                                                    Map<String, Object> cloud_note = document.getData();
-                                                    Note local_note = new Note();
-
-                                                    local_note.uid = Long.valueOf(cloud_note.get("uid").toString()).intValue();
-                                                    local_note.time = Long.valueOf(cloud_note.get("time").toString()).intValue();
-                                                    local_note.text = (String) cloud_note.get("text");
-                                                    local_note.done = (boolean) cloud_note.get("done");
-                                                    local_note.amount = (String) cloud_note.get("amount");
-                                                    local_note.group = (String) cloud_note.get("group");
-                                                    local_note.author = (String) cloud_note.get("author");
-                                                    local_note.sync = 1;
-                                                    repo.insert(local_note);
-                                                    Log.d(TAG, "succeful");
-                                                    Log.d(TAG, document.getId() + " => " + document.getData().get("text"));
-                                                }
-                                            } else {
-                                                Log.d(TAG, "Error getting documents: ", task.getException());
-                                            }
-                                            repo.deleteSync();
-                                        };
-                                    });
-                                    databaseExecutor.shutdown();
-                                }});
-
-                    }
+                    syncAddNotes();
                 }
                 if(id == R.id.action_updateclick) {
                     ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
@@ -482,6 +428,56 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    void syncAddNotes() {
+        Log.d(TAG, "sync begin");
+
+        Set<String> idsGroup = namesGroupDB.keySet();
+        String[] ids = idsGroup.toArray(new String[0]);
+
+        for(String idGroup : ids) {
+            cloud_database
+                    .collection("Notes")
+                    .document("groups")
+                    .collection(idGroup)
+                    .get()
+                    .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
+                        @Override
+                        public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                            ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+                            databaseExecutor.execute(new Runnable() {
+                                @Override
+                                public void run() {
+                                    NoteDao repo = App.getInstance().getNoteDao();
+                                    if (task.isSuccessful()) {
+                                        repo.clearSync();
+                                        for (QueryDocumentSnapshot document : task.getResult()) {
+                                            Map<String, Object> cloud_note = document.getData();
+                                            Note local_note = new Note();
+
+                                            local_note.uid = Long.valueOf(cloud_note.get("uid").toString()).intValue();
+                                            local_note.time = Long.valueOf(cloud_note.get("time").toString()).intValue();
+                                            local_note.text = (String) cloud_note.get("text");
+                                            local_note.done = (boolean) cloud_note.get("done");
+                                            local_note.amount = (String) cloud_note.get("amount");
+                                            local_note.group = (String) cloud_note.get("group");
+                                            local_note.author = (String) cloud_note.get("author");
+                                            local_note.sync = 1;
+                                            repo.insert(local_note);
+                                            Log.d(TAG, "succeful");
+                                            Log.d(TAG, document.getId() + " => " + document.getData().get("text"));
+                                        }
+                                    } else {
+                                        Log.d(TAG, "Error getting documents: ", task.getException());
+                                    }
+                                    repo.deleteSync();
+                                };
+                            });
+                            databaseExecutor.shutdown();
+                        }});
+
+        }
+
+    }
     @Override
     public boolean onSupportNavigateUp() {
         NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
@@ -529,7 +525,7 @@ public class MainActivity extends AppCompatActivity {
 
         return note2;
     }
-    private void showDialog(Note editNote) {
+    private void showDialog(Note editNote, int pos) {
         final Dialog dialog = new Dialog(this);
         dialog.setContentView(R.layout.dialog_layout);
         final EditText editText = dialog.findViewById(R.id.editTextText);
@@ -542,15 +538,10 @@ public class MainActivity extends AppCompatActivity {
                 if(!editText.equals(""))   {
                     String s = editText.getText().toString();
                     Note tmp = converterEntry(s);
-
-                    ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-                    databaseExecutor.execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            App.getInstance().getNoteDao().delete(editNote);
-//                            editNote.text = tmp.text;
-//                            editNote.amount = tmp.amount;
-//                            App.getInstance().getNoteDao().insert(editNote);
+                            editNote.text = tmp.text;
+                            editNote.amount = tmp.amount;
+                            adapter.updateItem(pos, editNote);
+//                            mainViewModel.updateNote(editNote);
                             Log.i("EditingNotes", "editNote: " + editNote.text + " " +editNote.amount);
                             cloud_database.collection("Notes")
                                     .document("groups")
@@ -558,18 +549,28 @@ public class MainActivity extends AppCompatActivity {
                                     .document(String.valueOf(editNote.uid))
                                     .update("text", editNote.text, "amount", editNote.amount);
 
-                        }
-                    });
-                    databaseExecutor.execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            editNote.text = tmp.text;
-                            editNote.amount = tmp.amount;
-                            App.getInstance().getNoteDao().insert(editNote);
-                        }
-                    });
+//                    ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+//                    databaseExecutor.execute(new Runnable() {
+//                        @Override
+//                        public void run() {
+//
+//
+//
+//                        }
+//                    });
+
+
+//                    databaseExecutor.execute(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            editNote.text = tmp.text;
+//                            editNote.amount = tmp.amount;
+//                            App.getInstance().getNoteDao().insert(editNote);
+//                        }
+//                    });
+//                    databaseExecutor.shutdown();
                     dialog.dismiss();
-                    databaseExecutor.shutdown();
+
 
                 }
 
@@ -676,15 +677,16 @@ public class MainActivity extends AppCompatActivity {
     void addNewList(Group group) {
         Log.i("cloudGroupName", "name2 = " + group.group);
         Log.i("cloudGroupName", "id2 = " + group.uid);
+        Boolean flag = allGroups.isEmpty() ? false : true;
         floatingActionButton.setVisibility(View.VISIBLE);
         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
         databaseExecutor.execute(new Runnable() {
             @Override
             public void run() {
-                synchronized (allGroups){
+                synchronized (allGroups) {
 
                     App.getInstance().getNoteDao().insert(group);
-                    if(allGroups.isEmpty()) {
+                    if (allGroups.isEmpty()) {
                         currentGroup = group.uid;
                         allGroups.add(group);
                         Message msg = new Message();
@@ -694,20 +696,28 @@ public class MainActivity extends AppCompatActivity {
                         allGroups.add(group);
                     }
                     namesGroupDB.put(group.uid, group.group);
-
-
-                    Map<String, Object> NewGroup1 = new HashMap<>();
-                    NewGroup1.put("group", group.group);
-                    cloud_database.collection("Notes")
-                            .document("groups")
-                            .collection("names")
-                            .document(group.uid)
-                            .set(NewGroup1);
                 }
+
+                Map<String, Object> NewGroup1 = new HashMap<>();
+                NewGroup1.put("group", group.group);
+                cloud_database.collection("Notes")
+                        .document("groups")
+                        .collection("names")
+                        .document(group.uid)
+                        .set(NewGroup1);
             }
         });
         databaseExecutor.shutdown();
-        groupAdapter.notifyDataSetChanged();
+
+        if(flag) groupAdapter.notifyDataSetChanged();
+        try {
+            if (databaseExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)) {
+                Log.i("editNewList1", "editNewList1: thread finish work ");
+                syncAddNotes();
+            }
+        } catch (InterruptedException e) {
+            Log.e("editNewList1", "editNewList1: time error ");
+        }
     }
     void editNewList(Group group) {
         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
@@ -814,6 +824,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.i("NewListCreate", "onClick: не прошло условие");
                     Toast.makeText(MainActivity.this, "такое имя уже есть", Toast.LENGTH_SHORT).show();
                 }
+
             }
 
         });
@@ -822,44 +833,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-
-//        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-//        databaseExecutor.execute(new Runnable() {
-//            @Override
-//            public void run() {
-//                List<Note> updateNotes = App.getInstance().getNoteDao().getUpdateNotes();
-//                for (Note updateNote : updateNotes) {
-//                    Log.d("DEL_DB", "обновляется товар " + updateNote.text);
-//
-//                    Map<String, Object> note1 = noteConverter(updateNote);
-//                    cloud_database.collection("Notes")
-//                            .whereEqualTo("uid",  updateNote.uid)
-//                            .limit(1)
-//                            .get().addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
-//                                @Override
-//                                public void onComplete(@NonNull Task<QuerySnapshot> task) {
-//                                    if (task.isSuccessful()) {
-//                                        for (QueryDocumentSnapshot document : task.getResult()) {
-//                                            cloud_database.collection("Notes").document(document.getId()).update(note1)
-//                                                    .addOnSuccessListener(aVoid -> {
-//                                                        Log.d("DEL_DB", "Документ " + document.getData().get("text").toString() + " успешно обновлен");
-//                                                    })
-//                                                    .addOnFailureListener(e -> {
-//                                                        Log.d("DEL_DB", "ОШИБКА при обновлении ДОКУМЕНТА из облака");
-//                                                    });;
-//                                        }
-//                                    } else {
-//                                        Log.d("DEL_DB", "ОШИБКА при обновлении ДАННЫХ из облака");
-//                                    }
-//                                }
-//                            });
-//                }
-//            }
-//        });
-//
-//        databaseExecutor.shutdown();
-
-
     }
 
     private Object hashCode(String valueOf) {
