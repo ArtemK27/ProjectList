@@ -12,5 +12,8 @@
     <string name="menu_delete">удалить купленные</string>
     <string name="action_sync">синхронзировать</string>
     <string name="add_list">Добавить новый список +</string>
+    <string name="action_edit_group_name">Изменить</string>
+    <string name="action_delete_group_name">Удалить</string>
+    <string name="action_share_group">Поделиться группой</string>
 
 </resources>

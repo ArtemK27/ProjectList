@@ -19,6 +19,7 @@ import com.example.projectlist.App;
 import com.example.projectlist.R;
 import com.example.projectlist.model.Group;
 import com.example.projectlist.model.Note;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 
 import java.util.List;
@@ -29,8 +30,11 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
 
     private SortedList<Note> sortedList;
     private OnItemLongClickListener mListener;
+    private FirebaseFirestore cloud_database;
+
     ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
     public Adapter() {
+        cloud_database = FirebaseFirestore.getInstance();
         sortedList = new SortedList<>(Note.class, new SortedList.Callback<Note>() {
             @Override
             public int compare(Note o1, Note o2) {
@@ -155,7 +159,12 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
                         @Override
                         public void run() {
                             App.getInstance().getNoteDao().update(note);
-
+                            cloud_database
+                                    .collection("Notes")
+                                    .document("groups")
+                                    .collection(note.group)
+                                    .document(String.valueOf(note.uid))
+                                    .update("done", note.done);
                         }
                     });
                     updateStrokeOut();

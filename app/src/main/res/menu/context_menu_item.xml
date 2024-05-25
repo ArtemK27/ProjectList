@@ -6,8 +6,8 @@
     <item
         android:id="@+id/action_delete_item"
         android:title="Удалить" />
-    <item
-        android:id="@+id/action_show_info"
-        android:title="Поднобности"/>
+<!--    <item-->
+<!--        android:id="@+id/action_show_info"-->
+<!--        android:title="Подробности"/>-->
 
 </menu>

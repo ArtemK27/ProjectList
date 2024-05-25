@@ -2,12 +2,12 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_edit_name"
-        android:title="Изменить" />
+        android:title="@string/action_edit_group_name" />
     <item
         android:id="@+id/action_delete_name"
-        android:title="Удалить" />
+        android:title="@string/action_delete_group_name" />
     <item
         android:id="@+id/action_show_id"
-        android:title="Узнать id"/>
+        android:title="@string/action_share_group"/>
 
 </menu>

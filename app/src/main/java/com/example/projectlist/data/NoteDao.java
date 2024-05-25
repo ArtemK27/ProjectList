@@ -16,13 +16,14 @@ import java.util.List;
 
 @Dao
 public interface NoteDao {
-    String s = "";
     @Query("SELECT * FROM Note")
     List<Note> getAll();
     @Query("UPDATE Note SET sync = 0")
     void clearSync();
     @Query("DELETE FROM NOTE WHERE sync = 0")
     void deleteSync();
+    @Query("DELETE FROM NOTE WHERE sync = 0 and `group` == :group")
+    void deleteSyncByGroup(String group);
 
 
     @Query("SELECT * FROM Note")
@@ -45,6 +46,8 @@ public interface NoteDao {
     void insert(Note note);
     @Query("SELECT * FROM Note WHERE update_flag = 'click_update'")
     List<Note> getClickatedNotes();
+    @Query("SELECT * FROM Note WHERE done = 1")
+    List<Note> getDoneNotes();
     @Query("UPDATE Note SET update_flag = NULL")
     void clearClickatedNotes();
 
@@ -56,21 +59,17 @@ public interface NoteDao {
     void delete(Note note);
 
     @Update
-    void update(Group note);
+    void update(Group group);
 
     @Delete
-    void delete(Group note);
+    void delete(Group group);
 
-    @Query("SELECT * FROM Note WHERE done = 1")
-    List<Note> getDoneNotes();
+
     @Query("SELECT * FROM Note WHERE done = 1 AND `group` = :group")
     List<Note> getDoneNoteByGroup(String group);
 
     @Query("SELECT * FROM Note WHERE update_flag = 1")
     List<Note>getUpdateNotes();
-
-
-
 
     @Query("SELECT * FROM names_group")
     List<Group> getAllNames();

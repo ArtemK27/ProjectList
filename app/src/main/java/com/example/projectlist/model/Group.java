@@ -14,15 +14,12 @@ import java.util.Objects;
 
 @Entity(tableName = "names_group")
 public class Group implements Parcelable {
-
-
     @NonNull
     @PrimaryKey()
     public String uid;
 
     @ColumnInfo(name = "group")
     public String group;
-
 
     @Override
     public int describeContents() {
