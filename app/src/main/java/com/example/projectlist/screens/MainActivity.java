@@ -211,7 +211,7 @@ public class MainActivity extends AppCompatActivity {
                                     if (id == R.id.action_show_id) {
                                         Intent intent = new Intent(Intent.ACTION_SEND);
                                         intent.setType("text/plain");
-                                        String link = "https://github.com/ArtemK27/ProjectList/wiki/add_group?id=" + groupAdapter.getGroupId(position);
+                                        String link = "ftp://quickcart.com/add_group?id=" + groupAdapter.getGroupId(position);
                                         intent.putExtra(Intent.EXTRA_TEXT,
                                                 "Присоединяйся к моему списку! \n"
                                                         + link);
