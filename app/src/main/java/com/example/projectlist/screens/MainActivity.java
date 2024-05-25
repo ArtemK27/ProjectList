@@ -2,18 +2,14 @@ package com.example.projectlist.screens;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
-import android.view.ContextMenu;
 import android.view.Gravity;
 import android.view.MenuItem;
 import android.view.View;
@@ -37,7 +33,6 @@ import android.widget.Toast;
 
 import com.example.projectlist.App;
 import com.example.projectlist.R;
-import com.example.projectlist.data.NoteDao;
 import com.example.projectlist.model.Group;
 import com.example.projectlist.model.Note;
 import com.google.android.gms.tasks.OnCompleteListener;
@@ -46,19 +41,12 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.view.GravityCompat;
 import androidx.lifecycle.LiveData;
-import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
-import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.navigation.NavController;
-import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
-import androidx.navigation.ui.NavigationUI;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.DividerItemDecoration;
@@ -70,27 +58,16 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
-
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 
 public class MainActivity extends AppCompatActivity {
-
-    private AppBarConfiguration mAppBarConfiguration;
-
     List<Group> allGroups;
-    ArrayAdapter<String> adapterNameLists;
     private ActivityMainBinding binding;
     GroupAdapter groupAdapter;
     Toolbar toolbar;
@@ -98,12 +75,9 @@ public class MainActivity extends AppCompatActivity {
     private Note note;
     private MainViewModel mainViewModel;
     Adapter adapter;
-    ImageView imageView;
-    Dialog dialog;
     TextView addList;
     ListView listViewNames;
     HashMap<String, String> namesGroupDB = new HashMap<>();
-    ExecutorService databaseExecutorMain;
     Handler handler;
     String currentGroup = "";
 
@@ -117,37 +91,24 @@ public class MainActivity extends AppCompatActivity {
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-        mainViewModel = new ViewModelProvider(this).get(MainViewModel.class);
+//        mainViewModel = new ViewModelProvider(this).get(MainViewModel.class);
 
         cloud_database = FirebaseFirestore.getInstance();
         setSupportActionBar(binding.appBarMain.toolbar);
         floatingActionButton = findViewById(R.id.fab);
-        binding.appBarMain.fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                showDialog();
-            }
-        });
+        binding.appBarMain.fab.setOnClickListener(view -> showDialog());
 
         listViewNames = findViewById(R.id.names_list);
 
         NavigationView navView = findViewById(R.id.nav_view);
         //  ОБРАБОТКА НАЖАТИЯ НА КАРТИНКУ ------------------------------------------------
         ImageView imageView =  navView.getHeaderView(0).findViewById(R.id.imageView);
-        imageView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // действия при нажатии на картинку
-            }
+        imageView.setOnClickListener(v -> {
+            // действия при нажатии на картинку
         });
 
         addList = findViewById(R.id.add_list);
-        addList.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showDialogAddList();
-            }
-        });
+        addList.setOnClickListener(v -> showDialogAddList());
 
         DrawerLayout drawer = binding.drawerLayout;
         NavigationView navigationView = binding.navView;
@@ -183,7 +144,9 @@ public class MainActivity extends AppCompatActivity {
                                     DocumentSnapshot document = task.getResult();
                                     if (document != null && document.exists()) {
                                         Map<String, Object> cloudGroupName = task.getResult().getData();
-                                        nameGroup = (String) cloudGroupName.get("group");
+                                        if (cloudGroupName != null) {
+                                            nameGroup = (String) cloudGroupName.get("group");
+                                        }
                                     } else {
                                         Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
                                     }
@@ -235,13 +198,7 @@ public class MainActivity extends AppCompatActivity {
                                             mainViewModel.setFilter(currentGroup);
                                         }
                                         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-                                        databaseExecutor.execute(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                App.getInstance().getNoteDao().deleteName(group.uid);
-                                            }
-                                        });
-
+                                        databaseExecutor.execute(() -> App.getInstance().getNoteDao().deleteName(group.uid));
                                         return true;
                                     }
 
@@ -254,7 +211,7 @@ public class MainActivity extends AppCompatActivity {
                                     if (id == R.id.action_show_id) {
                                         Intent intent = new Intent(Intent.ACTION_SEND);
                                         intent.setType("text/plain");
-                                        String link = "https://github.com/ArtemK27/ProjectList/wiki/add_group?id=" + String.valueOf(groupAdapter.getGroupId(position));
+                                        String link = "https://github.com/ArtemK27/ProjectList/wiki/add_group?id=" + groupAdapter.getGroupId(position);
                                         intent.putExtra(Intent.EXTRA_TEXT,
                                                 "Присоединяйся к моему списку! \n"
                                                         + link);
@@ -295,58 +252,49 @@ public class MainActivity extends AppCompatActivity {
 
                     mainViewModel.setFilter(currentGroup);
                     LiveData<List<Note>> liveNotes = mainViewModel.getLiveDataByGroup();
-                    liveNotes.observe(MainActivity.this, new Observer<List<Note>>() {
-                        @Override
-                        public void onChanged(List<Note> notes) {
+                    liveNotes.observe(MainActivity.this, notes -> {
 //                            adapter.setItems(null);
-                            adapter.setItems(notes);
-                        }
+                        adapter.setItems(notes);
                     });
 
 
-                    adapter.setOnItemLongClickListener(new Adapter.OnItemLongClickListener() {
-                        @Override
-                        public void onItemLongClick(int position, View view) {
-                            Note tmp = adapter.getNote(position);
+                    adapter.setOnItemLongClickListener((position, view) -> {
+                        Note tmp = adapter.getNote(position);
 //                            Toast.makeText(MainActivity.this, tmp.text, Toast.LENGTH_SHORT).show();
 
 
-                            PopupMenu popupMenu = new PopupMenu(getApplicationContext(), view);
-                            popupMenu.inflate(R.menu.context_menu_item);
-                            popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-                                @Override
-                                public boolean onMenuItemClick(MenuItem item) {
-                                    int id = item.getItemId();
-                                    if(id == R.id.action_delete_item) {
-                                        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-                                        databaseExecutor.execute(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                Log.d("DEL_DB", "удаляется doneNote с товаром " + tmp.text + tmp.amount);
-                                                cloud_database.collection("Notes")
-                                                        .document("groups")
-                                                        .collection(currentGroup)
-                                                        .document(String.valueOf(tmp.uid))
-                                                        .delete();
-                                                App.getInstance().getNoteDao().delete(tmp);
-                                            }
-                                        });
-
-                                        databaseExecutor.shutdown();
-                                        return true;
+                        PopupMenu popupMenu = new PopupMenu(getApplicationContext(), view);
+                        popupMenu.inflate(R.menu.context_menu_item);
+                        popupMenu.setOnMenuItemClickListener(item -> {
+                            int id = item.getItemId();
+                            if(id == R.id.action_delete_item) {
+                                ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+                                databaseExecutor.execute(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Log.d("DEL_DB", "удаляется doneNote с товаром " + tmp.text + tmp.amount);
+                                        cloud_database.collection("Notes")
+                                                .document("groups")
+                                                .collection(currentGroup)
+                                                .document(String.valueOf(tmp.uid))
+                                                .delete();
+                                        App.getInstance().getNoteDao().delete(tmp);
                                     }
-                                    if(id == R.id.action_edit_item) {
-                                        showDialog(tmp, position);
-                                        return true;
-                                    }
+                                });
+
+                                databaseExecutor.shutdown();
+                                return true;
+                            }
+                            if(id == R.id.action_edit_item) {
+                                showDialog(tmp, position);
+                                return true;
+                            }
 
 
-                                    return false;
-                                }
-                            });
-                            popupMenu.show();
+                            return false;
+                        });
+                        popupMenu.show();
 
-                        }
                     });
                     syncAddNotes();
 
@@ -367,7 +315,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 Group group = groupAdapter.getItem(position);
-                currentGroup = group.uid;
+                if (group != null) {
+                    currentGroup = group.uid;
+                }
 
                 mainViewModel.setFilter(currentGroup);
                 toolbar.setTitle(group.group);
@@ -434,7 +384,7 @@ public class MainActivity extends AppCompatActivity {
         note1.put("author", note.author);
 
         return note1;
-    };
+    }
 
 
     @Override
@@ -472,29 +422,29 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    void syncDoneNotes() {
-        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-        databaseExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                List<Note> clickatedNotes = App.getInstance().getNoteDao().getClickatedNotes();
-                for(Note curNote : clickatedNotes) {
-                    cloud_database
-                            .collection("Notes")
-                            .document("groups")
-                            .collection(curNote.group)
-                            .document(String.valueOf(curNote.uid))
-                            .update("done", curNote.done);
-                }
-                App.getInstance().getNoteDao().clearClickatedNotes();
-            }
-        });
-    }
+//    void syncDoneNotes() {
+//        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+//        databaseExecutor.execute(new Runnable() {
+//            @Override
+//            public void run() {
+//                List<Note> clickatedNotes = App.getInstance().getNoteDao().getClickatedNotes();
+//                for(Note curNote : clickatedNotes) {
+//                    cloud_database
+//                            .collection("Notes")
+//                            .document("groups")
+//                            .collection(curNote.group)
+//                            .document(String.valueOf(curNote.uid))
+//                            .update("done", curNote.done);
+//                }
+//                App.getInstance().getNoteDao().clearClickatedNotes();
+//            }
+//        });
+//    }
     void syncAddNotes() {
 
                 Log.d(TAG, "sync begin");
                 for(String idGroup : namesGroupDB.keySet()) {
-                    Log.i("SyncGroup", "group =  " + String.valueOf(idGroup));
+                    Log.i("SyncGroup", "group =  " + idGroup);
                     cloud_database
                             .collection("Notes")
                             .document("groups")
@@ -559,7 +509,7 @@ public class MainActivity extends AppCompatActivity {
             for(int j = s.length()-1; j > 0; j--) {
                 if (Character.isDigit(s.charAt(j))) {
                     last_num_pos = j;
-                    Log.d(TAG, "last_num_pos = " + String.valueOf(j));
+                    Log.d(TAG, "last_num_pos = " + j);
 
                     for(String check : units) {
                         if (s.substring(last_num_pos, s.length()).toLowerCase().contains(check)) {
@@ -594,7 +544,7 @@ public class MainActivity extends AppCompatActivity {
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(!editText.equals(""))   {
+                if(!editText.getText().toString().equals(""))   {
                     String s = editText.getText().toString();
                     Note tmp = converterEntry(s);
                             editNote.text = tmp.text;
@@ -711,12 +661,12 @@ public class MainActivity extends AppCompatActivity {
         }
         Log.i("ISTHISID?", "is_id: " + "false");
         return false;
-    };
+    }
 
     void addNewList(Group group) {
         Log.i("cloudGroupName", "name2 = " + group.group);
         Log.i("cloudGroupName", "id2 = " + group.uid);
-        Boolean flag = allGroups.isEmpty() ? false : true;
+        boolean flag = !allGroups.isEmpty();
         floatingActionButton.setVisibility(View.VISIBLE);
         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
         databaseExecutor.execute(new Runnable() {
@@ -845,57 +795,51 @@ public class MainActivity extends AppCompatActivity {
         progressBar.setVisibility(View.INVISIBLE);
 
         LinearLayout linearLayout = dialog.findViewById(R.id.layout_button);
-        linearLayout.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String listName = editText.getText().toString();
+        linearLayout.setOnClickListener(v -> {
+            String listName = editText.getText().toString();
 
-                if(!listName.equals("") && !namesGroupDB.containsValue(listName) ) {
-                    Group group = new Group();
-                    if (is_id(listName)) {
-                        progressBar.setVisibility(View.VISIBLE);
-                        progressBar.startAnimation(animate);
-                        cloud_database.collection("Notes")
-                                .document("groups")
-                                .collection("names")
-                                .document(listName)
-                                .get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
-                                    @Override
-                                    public void onComplete(@NonNull Task<DocumentSnapshot> task) {
-                                        if (task.isSuccessful()) {
-                                            DocumentSnapshot document = task.getResult();
-                                            if (document != null && document.exists()) {
-                                                Map<String, Object> cloudGroupName = task.getResult().getData();
-                                                group.group = (String) cloudGroupName.get("group");
-                                                Log.i("cloudGroupName", "name0 = " + group.group);
-                                                group.uid = listName;
-                                            } else {
-                                                Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
-                                            }
-                                        } else {
-                                            Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
-                                        }
-                                        addNewList(group);
-                                        progressBar.clearAnimation();
-                                        dialog.dismiss();
+            if(!listName.equals("") && !namesGroupDB.containsValue(listName) ) {
+                Group group = new Group();
+                if (is_id(listName)) {
+                    progressBar.setVisibility(View.VISIBLE);
+                    progressBar.startAnimation(animate);
+                    cloud_database.collection("Notes")
+                            .document("groups")
+                            .collection("names")
+                            .document(listName)
+                            .get().addOnCompleteListener(task -> {
+                                if (task.isSuccessful()) {
+                                    DocumentSnapshot document = task.getResult();
+                                    if (document != null && document.exists()) {
+                                        Map<String, Object> cloudGroupName = task.getResult().getData();
+                                        assert cloudGroupName != null;
+                                        group.group = (String) cloudGroupName.get("group");
+                                        Log.i("cloudGroupName", "name0 = " + group.group);
+                                        group.uid = listName;
+                                    } else {
+                                        Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
                                     }
-                                });
-                    } else {
-                        group.uid = UUID.randomUUID().toString();
-                        group.group = listName;
-                        addNewList(group);
-                        dialog.dismiss();
-
-                    }
+                                } else {
+                                    Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
+                                }
+                                addNewList(group);
+                                progressBar.clearAnimation();
+                                dialog.dismiss();
+                            });
                 } else {
-                    Log.i("NewListCreate", "onClick: не прошло условие");
-                    Toast.makeText(MainActivity.this, "такое имя уже есть", Toast.LENGTH_SHORT).show();
-                }
+                    group.uid = UUID.randomUUID().toString();
+                    group.group = listName;
+                    addNewList(group);
+                    dialog.dismiss();
 
+                }
+            } else {
+                Log.i("NewListCreate", "onClick: не прошло условие");
+                Toast.makeText(MainActivity.this, "такое имя уже есть", Toast.LENGTH_SHORT).show();
             }
 
         });
-    };
+    }
 
 
     void addGroupById(String id) {
@@ -904,24 +848,22 @@ public class MainActivity extends AppCompatActivity {
                 .document("groups")
                 .collection("names")
                 .document(id)
-                .get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
-                    @Override
-                    public void onComplete(@NonNull Task<DocumentSnapshot> task) {
-                        if (task.isSuccessful()) {
-                            DocumentSnapshot document = task.getResult();
-                            if (document != null && document.exists()) {
-                                Map<String, Object> cloudGroupName = task.getResult().getData();
-                                group.group = (String) cloudGroupName.get("group");
-                                Log.i("cloudGroupName", "name0 = " + group.group);
-                                group.uid = id;
-                            } else {
-                                Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
-                            }
+                .get().addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        DocumentSnapshot document = task.getResult();
+                        if (document != null && document.exists()) {
+                            Map<String, Object> cloudGroupName = task.getResult().getData();
+                            assert cloudGroupName != null;
+                            group.group = (String) cloudGroupName.get("group");
+                            Log.i("cloudGroupName", "name0 = " + group.group);
+                            group.uid = id;
                         } else {
                             Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
                         }
-                        addNewList(group);
+                    } else {
+                        Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
                     }
+                    addNewList(group);
                 });
     }
 

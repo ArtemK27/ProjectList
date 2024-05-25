@@ -3,7 +3,6 @@ package com.example.projectlist;
 import android.app.Application;
 
 import androidx.room.Room;
-import androidx.room.RoomDatabase;
 
 import com.example.projectlist.data.AppDataBase;
 import com.example.projectlist.data.NoteDao;

@@ -1,15 +1,11 @@
 package com.example.projectlist.screens;
 
-import android.annotation.SuppressLint;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.view.LayoutInflater;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.PopupMenu;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -17,7 +13,6 @@ import androidx.recyclerview.widget.SortedList;
 
 import com.example.projectlist.App;
 import com.example.projectlist.R;
-import com.example.projectlist.model.Group;
 import com.example.projectlist.model.Note;
 import com.google.firebase.firestore.FirebaseFirestore;
 
@@ -106,14 +101,11 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
         holder.bind(sortedList.get(holder.getAdapterPosition()));
 
 
-        holder.itemView.setOnLongClickListener(new View.OnLongClickListener() {
-            @Override
-            public boolean onLongClick(View v) {
-                if (mListener != null) {
-                    mListener.onItemLongClick(holder.getAdapterPosition(), v);
-                }
-                return true;
+        holder.itemView.setOnLongClickListener(v -> {
+            if (mListener != null) {
+                mListener.onItemLongClick(holder.getAdapterPosition(), v);
             }
+            return true;
         });
     }
 
@@ -129,13 +121,7 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
     public void updateItem(int pos, Note note ) {
         sortedList.updateItemAt(pos, note);
 
-        databaseExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                App.getInstance().getNoteDao().update(note);
-
-            }
-        });
+        databaseExecutor.execute(() -> App.getInstance().getNoteDao().update(note));
     }
 
     class NoteViewHolder extends RecyclerView.ViewHolder {
@@ -149,30 +135,24 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
             noteAmount = itemView.findViewById(R.id.note_amount);
 
 
-            itemView.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    note.time = System.currentTimeMillis();
-                    note.done = !note.done;
-                    note.update_flag = "click_update";
-                    databaseExecutor.execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            App.getInstance().getNoteDao().update(note);
-                            cloud_database
-                                    .collection("Notes")
-                                    .document("groups")
-                                    .collection(note.group)
-                                    .document(String.valueOf(note.uid))
-                                    .update("done", note.done);
-                        }
-                    });
-                    updateStrokeOut();
-                    //-----------------------------------------------------
-                    // НЕТ ЗАКРЫТИЯ ПОТОКА, ну и ладно че
+            itemView.setOnClickListener(v -> {
+                note.time = System.currentTimeMillis();
+                note.done = !note.done;
+                note.update_flag = "click_update";
+                databaseExecutor.execute(() -> {
+                    App.getInstance().getNoteDao().update(note);
+                    cloud_database
+                            .collection("Notes")
+                            .document("groups")
+                            .collection(note.group)
+                            .document(String.valueOf(note.uid))
+                            .update("done", note.done);
+                });
+                updateStrokeOut();
+                //-----------------------------------------------------
+                // НЕТ ЗАКРЫТИЯ ПОТОКА, ну и ладно че
 
 
-                }
             });
 
         }
