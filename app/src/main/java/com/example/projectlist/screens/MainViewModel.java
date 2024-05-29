@@ -22,21 +22,6 @@ public class MainViewModel extends ViewModel {
     private MutableLiveData<String> filterLiveData = new MutableLiveData<>();
     private List<Group> namesLists;
 
-    public List<Group> getAllNames() {
-
-        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-        databaseExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                namesLists = App.getInstance().getNoteDao().getAllNames();
-            }
-        });
-
-        databaseExecutor.shutdown();
-
-
-        return namesLists;
-    };
     public MainViewModel () {
         noteLiveData = repo.getAllLiveData();
         searchByLiveData = Transformations.switchMap(filterLiveData,
@@ -52,23 +37,33 @@ public class MainViewModel extends ViewModel {
         return searchByLiveData;
     }
 
-    public void updateNote(Note note) {
-        // Обновите заметку в базе данных
-        repo.update(note);
-    }
 
+//    public void deleteDoneNotes() {
+//        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+//        databaseExecutor.execute(new Runnable() {
+//            @Override
+//            public void run() {
+//                App.getInstance().getNoteDao().deleteDoneNotes();
+//            }
+//        });
+//
+//        databaseExecutor.shutdown();
+//    }
 
-    public void deleteDoneNotes() {
-        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-        databaseExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                App.getInstance().getNoteDao().deleteDoneNotes();
-            }
-        });
-
-        databaseExecutor.shutdown();
-    }
+    //    public List<Group> getAllNames() {
+//
+//        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+//        databaseExecutor.execute(new Runnable() {
+//            @Override
+//            public void run() {
+//                namesLists = App.getInstance().getNoteDao().getAllGroups();
+//            }
+//        });
+//
+//        databaseExecutor.shutdown();
+//
+//        return namesLists;
+//    };
 
 
 }

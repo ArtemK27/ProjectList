@@ -11,7 +11,6 @@ public class App extends Application {
 
     private AppDataBase dataBase;
     private NoteDao noteDao;
-
     private static App instance;
     public static App getInstance() {
         return instance;

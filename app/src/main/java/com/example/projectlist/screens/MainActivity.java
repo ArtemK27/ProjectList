@@ -20,7 +20,6 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -44,9 +43,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.widget.Toolbar;
 import androidx.lifecycle.LiveData;
-import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.navigation.ui.AppBarConfiguration;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.DividerItemDecoration;
@@ -80,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
     HashMap<String, String> namesGroupDB = new HashMap<>();
     Handler handler;
     String currentGroup = "";
+    ProgressBar progressBarMain;
+    List<String> allGroupNames;
 
     private FirebaseFirestore cloud_database;
 
@@ -97,7 +96,7 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(binding.appBarMain.toolbar);
         floatingActionButton = findViewById(R.id.fab);
         binding.appBarMain.fab.setOnClickListener(view -> showDialog());
-
+        progressBarMain = findViewById(R.id.progressBarMain);
         listViewNames = findViewById(R.id.names_list);
 
         NavigationView navView = findViewById(R.id.nav_view);
@@ -124,14 +123,25 @@ public class MainActivity extends AppCompatActivity {
 
         registerForContextMenu(listViewNames);
 
+        ExecutorService clearSyncExecutor = Executors.newSingleThreadExecutor();
+        clearSyncExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                App.getInstance().getNoteDao().clearSync();
+            }
+        });
+
         Intent intent = getIntent();
         Uri data = intent.getData();
 
-        if (data != null) {
+        if (data != null ) {
+            progressBarMain.setVisibility(View.VISIBLE);
 
+            Animation animate;
+            animate = AnimationUtils.loadAnimation(MainActivity.this, R.anim.progress_animate);
+            progressBarMain.startAnimation(animate);
             String groupId = data.getQueryParameter("id");
             if (groupId != null) {
-
                 cloud_database.collection("Notes")
                         .document("groups")
                         .collection("names")
@@ -139,24 +149,47 @@ public class MainActivity extends AppCompatActivity {
                         .get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
                             @Override
                             public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+
                                 if (task.isSuccessful()) {
-                                    String nameGroup = "";
                                     DocumentSnapshot document = task.getResult();
                                     if (document != null && document.exists()) {
+
                                         Map<String, Object> cloudGroupName = task.getResult().getData();
                                         if (cloudGroupName != null) {
-                                            nameGroup = (String) cloudGroupName.get("group");
+                                            ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+                                            databaseExecutor.execute(() -> {
+                                                allGroupNames = App.getInstance().getNoteDao().getAllNames();
+                                            });
+                                            databaseExecutor.shutdown();
+                                            try {
+                                                if(databaseExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)) {
+                                                    if(!allGroupNames.contains(groupId)) {
+                                                        showAddGroupDialog(groupId, (String) cloudGroupName.get("group"));
+                                                    } else {
+                                                        Toast.makeText(MainActivity.this, "Такой список уже существует", Toast.LENGTH_SHORT).show();
+                                                    }
+                                                }
+                                            } catch (InterruptedException e) {
+//                                                throw new RuntimeException(e);
+                                            }
+
                                         }
                                     } else {
                                         Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
                                     }
-                                    showAddGroupDialog(groupId,  nameGroup);
+                                    progressBarMain.clearAnimation();
+                                    progressBarMain.setVisibility(View.INVISIBLE);
+
                                 } else {
                                     Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
                                 }
 
                             }
                         });
+            } else {
+                Toast.makeText(MainActivity.this, "Такой список уже существует", Toast.LENGTH_SHORT).show();
+                progressBarMain.clearAnimation();
+                progressBarMain.setVisibility(View.INVISIBLE);
             }
         }
 
@@ -212,9 +245,7 @@ public class MainActivity extends AppCompatActivity {
                                         Intent intent = new Intent(Intent.ACTION_SEND);
                                         intent.setType("text/plain");
                                         String link = "ftp://quickcart.com/add_group?id=" + groupAdapter.getGroupId(position);
-                                        intent.putExtra(Intent.EXTRA_TEXT,
-                                                "Присоединяйся к моему списку! \n"
-                                                        + link);
+                                        intent.putExtra(Intent.EXTRA_TEXT,link);
 
                                         if (intent.resolveActivity(getPackageManager()) != null) {
                                             // Проверяем есть ли устройство подходящее приложение для открытия интента.
@@ -299,7 +330,6 @@ public class MainActivity extends AppCompatActivity {
                     syncAddNotes();
 
 
-
                 } else if(msg.arg1 == -1) {
                     floatingActionButton.setVisibility(View.INVISIBLE);
                     toolbar.setTitle("Создайте новый список");
@@ -336,7 +366,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 Message msg = new Message();
-                allGroups = App.getInstance().getNoteDao().getAllNames();
+                allGroups = App.getInstance().getNoteDao().getAllGroups();
 
                 if (!allGroups.isEmpty()) {
                     synchronized (currentGroup) {
@@ -412,9 +442,9 @@ public class MainActivity extends AppCompatActivity {
                     databaseExecutor.shutdown();
 
                 }
-//                if(id == R.id.action_sync){
-//                    syncAddNotes();
-//                }
+                if(id == R.id.action_sync){
+                    syncAddNotes();
+                }
 //                if(id == R.id.action_updateclick) {
 //                    syncDoneNotes();
 //                }
@@ -441,7 +471,6 @@ public class MainActivity extends AppCompatActivity {
 //        });
 //    }
     void syncAddNotes() {
-
                 Log.d(TAG, "sync begin");
                 for(String idGroup : namesGroupDB.keySet()) {
                     Log.i("SyncGroup", "group =  " + idGroup);
@@ -459,7 +488,7 @@ public class MainActivity extends AppCompatActivity {
 
                                             @Override
                                             public void run() {
-                                                App.getInstance().getNoteDao().clearSync();
+//                                                App.getInstance().getNoteDao().clearSync();
                                                 for (QueryDocumentSnapshot document : task.getResult()) {
                                                     Map<String, Object> cloud_note = document.getData();
                                                     Note local_note = new Note();
@@ -651,12 +680,10 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-    private boolean is_id(String s) {
-        if(s.length() < 26) return false;
-        if (s.charAt(8) == '-'
-                && s.charAt(13) == '-'
-                && s.charAt(18) == '-') {
-            Log.i("ISTHISID?", "is_id: " + "true");
+    private boolean is_link(String s) {
+        if(s.length() < 50) return false;
+        if (s.charAt(32) == '=') {
+            Log.i("IS_this_link", "на 32 позиции буква " + s.charAt(32));
             return true;
         }
         Log.i("ISTHISID?", "is_id: " + "false");
@@ -699,14 +726,14 @@ public class MainActivity extends AppCompatActivity {
         databaseExecutor.shutdown();
 
         if(flag) groupAdapter.notifyDataSetChanged();
-        try {
-            if (databaseExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)) {
-                Log.i("editNewList1", "editNewList1: thread finish work ");
-                syncAddNotes();
-            }
-        } catch (InterruptedException e) {
-            Log.e("editNewList1", "editNewList1: time error ");
-        }
+//        try {
+//            if (databaseExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)) {
+//                Log.i("editNewList1", "editNewList1: thread finish work ");
+//                syncAddNotes();
+//            }
+//        } catch (InterruptedException e) {
+//            Log.e("editNewList1", "editNewList1: time error ");
+//        }
     }
     void editNewList(Group group) {
         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
@@ -796,46 +823,54 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout linearLayout = dialog.findViewById(R.id.layout_button);
         linearLayout.setOnClickListener(v -> {
-            String listName = editText.getText().toString();
+            String listName = editText.getText().toString().trim();
 
-            if(!listName.equals("") && !namesGroupDB.containsValue(listName) ) {
+            if(!listName.equals("") && !namesGroupDB.containsValue(listName)) {
                 Group group = new Group();
-                if (is_id(listName)) {
-                    progressBar.setVisibility(View.VISIBLE);
-                    progressBar.startAnimation(animate);
-                    cloud_database.collection("Notes")
-                            .document("groups")
-                            .collection("names")
-                            .document(listName)
-                            .get().addOnCompleteListener(task -> {
-                                if (task.isSuccessful()) {
-                                    DocumentSnapshot document = task.getResult();
-                                    if (document != null && document.exists()) {
-                                        Map<String, Object> cloudGroupName = task.getResult().getData();
-                                        assert cloudGroupName != null;
-                                        group.group = (String) cloudGroupName.get("group");
-                                        Log.i("cloudGroupName", "name0 = " + group.group);
-                                        group.uid = listName;
+                if (is_link(listName)) {
+                    String idGroup = listName.substring(33);
+                    if (!namesGroupDB.containsKey(idGroup)) {
+                        progressBar.setVisibility(View.VISIBLE);
+                        progressBar.startAnimation(animate);
+                        cloud_database.collection("Notes")
+                                .document("groups")
+                                .collection("names")
+                                .document(idGroup)
+                                .get().addOnCompleteListener(task -> {
+                                    if (task.isSuccessful()) {
+                                        DocumentSnapshot document = task.getResult();
+                                        if (document != null && document.exists()) {
+                                            Map<String, Object> cloudGroupName = task.getResult().getData();
+                                            assert cloudGroupName != null;
+                                            group.group = (String) cloudGroupName.get("group");
+                                            Log.i("cloudGroupName", "name0 = " + group.group);
+                                            group.uid = idGroup;
+                                            addNewList(group);
+                                        } else {
+                                            Toast.makeText(MainActivity.this, "Такого id нет", Toast.LENGTH_SHORT).show();
+                                        }
                                     } else {
-                                        Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(MainActivity.this, "Такого id нет", Toast.LENGTH_SHORT).show();
                                     }
-                                } else {
-                                    Toast.makeText(MainActivity.this, "такого id нет", Toast.LENGTH_SHORT).show();
-                                }
-                                addNewList(group);
-                                progressBar.clearAnimation();
-                                dialog.dismiss();
-                            });
+                                    progressBar.clearAnimation();
+                                    dialog.dismiss();
+                                });
+                    } else {
+                        Toast.makeText(MainActivity.this, "Такой список уже существует", Toast.LENGTH_SHORT).show();
+                    }
                 } else {
-                    group.uid = UUID.randomUUID().toString();
-                    group.group = listName;
-                    addNewList(group);
-                    dialog.dismiss();
-
+                    if (listName.length() > 40) {
+                        Toast.makeText(MainActivity.this, "Слишком длинное название списка", Toast.LENGTH_SHORT).show();
+                    } else {
+                        group.uid = UUID.randomUUID().toString();
+                        group.group = listName;
+                        addNewList(group);
+                        dialog.dismiss();
+                    }
                 }
             } else {
                 Log.i("NewListCreate", "onClick: не прошло условие");
-                Toast.makeText(MainActivity.this, "такое имя уже есть", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Неправильный ввод или такое имя уже есть", Toast.LENGTH_SHORT).show();
             }
 
         });

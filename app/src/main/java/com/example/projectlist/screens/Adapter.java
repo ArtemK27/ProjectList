@@ -120,7 +120,6 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
     }
     public void updateItem(int pos, Note note ) {
         sortedList.updateItemAt(pos, note);
-
         databaseExecutor.execute(() -> App.getInstance().getNoteDao().update(note));
     }
 
