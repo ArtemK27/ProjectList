@@ -1,5 +1,6 @@
 package com.example.projectlist.screens;
 
+import android.Manifest;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.NotificationChannel;
@@ -8,11 +9,13 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MenuItem;
@@ -48,7 +51,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.drawerlayout.widget.DrawerLayout;
@@ -102,13 +107,15 @@ public class MainActivity extends AppCompatActivity {
     public List<Note> deleted = new LinkedList<>();
     public List<Note> changed = new LinkedList<>();
     public List<Note> added = new LinkedList<>();
+    static public String author;
 
     private static final String TAG = "MainActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        author = Settings.Secure.getString(getApplicationContext().getContentResolver(), Settings.Secure.ANDROID_ID);
+        Log.d("UniqueID", "Android ID: " + author);
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 //        mainViewModel = new ViewModelProvider(this).get(MainViewModel.class);
@@ -148,6 +155,13 @@ public class MainActivity extends AppCompatActivity {
         MainViewModel mainViewModel = new ViewModelProvider(this).get(MainViewModel.class);
 
         registerForContextMenu(listViewNames);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+            }
+        }
+
 
         ExecutorService clearSyncExecutor = Executors.newSingleThreadExecutor();
         clearSyncExecutor.execute(new Runnable() {
@@ -326,8 +340,6 @@ public class MainActivity extends AppCompatActivity {
 
                     adapter.setOnItemLongClickListener((position, view) -> {
                         Note tmp = adapter.getNote(position);
-//                            Toast.makeText(MainActivity.this, tmp.text, Toast.LENGTH_SHORT).show();
-
 
                         PopupMenu popupMenu = new PopupMenu(getApplicationContext(), view);
                         popupMenu.inflate(R.menu.context_menu_item);
@@ -339,13 +351,21 @@ public class MainActivity extends AppCompatActivity {
                                 databaseExecutor.execute(new Runnable() {
                                     @Override
                                     public void run() {
+                                        App.getInstance().getNoteDao().delete(tmp);
                                         Log.d("DEL_DB", "удаляется doneNote с товаром " + tmp.text + tmp.amount);
+
+                                        cloud_database.collection("Notes")
+                                                .document("groups")
+                                                .collection(currentGroup)
+                                                .document(String.valueOf(tmp.uid))
+                                                .update("author", author);
+                                        tmp.author = author;
                                         cloud_database.collection("Notes")
                                                 .document("groups")
                                                 .collection(currentGroup)
                                                 .document(String.valueOf(tmp.uid))
                                                 .delete();
-                                        App.getInstance().getNoteDao().delete(tmp);
+
                                     }
                                 });
 
@@ -400,7 +420,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    public void showNotification(String msg) {
+    public void showNotification(String msg, String nameOfGroup) {
 
         Intent intent = new Intent(getApplicationContext(), MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -417,7 +437,7 @@ public class MainActivity extends AppCompatActivity {
                 .setTicker("Новое уведомление")
                 .setWhen(System.currentTimeMillis())
                 .setAutoCancel(true)
-                .setContentTitle("Quick cart")
+                .setContentTitle(nameOfGroup)
                 .setContentText(msg);
 
         int notificationId = (int) System.currentTimeMillis();
@@ -425,7 +445,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
+    boolean isFirstCall;
     private void setFireStoreListener(String id) {
         if (id == "" || id == null) {
             return;
@@ -433,7 +453,8 @@ public class MainActivity extends AppCompatActivity {
         if (fireStoreListener != null) {
             fireStoreListener.remove();
         }
-
+        String nameOfGroup = namesGroupDB.get(id);
+        isFirstCall = true;
 
         fireStoreListener = cloud_database
                 .collection("Notes")
@@ -446,52 +467,117 @@ public class MainActivity extends AppCompatActivity {
                             Log.w("Firestore", "Listen failed.", error);
                             return;
                         }
+                        if (isFirstCall) {
+                            isFirstCall = false;
+                            return; // Игнорируем первое событие
+                        }
+
                         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
                         for (DocumentChange dc : value.getDocumentChanges()) {
                             Note item = dc.getDocument().toObject(Note.class);
                             boolean exist = adapter.is_exist(item);
 
-                            if (!exist) {
+                            if (!item.author.equals(author) && !exist) {
                                 switch (dc.getType()) {
                                     case ADDED:
                                         databaseExecutor.execute(() -> {
                                             App.getInstance().getNoteDao().insert(item);
                                         });
-                                        showNotification("Был добавлен " + '"' + item.text + '"' + " " + item.amount);
+
+                                        showNotification("Был добавлен " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
                                         break;
                                     case MODIFIED:
                                         databaseExecutor.execute(() -> {
                                             Note previousNote = App.getInstance().getNoteDao().findById(item.uid);
-                                            App.getInstance().getNoteDao().insert(item);
+                                            if(!(item.text.equals(previousNote.text) &&
+                                                    item.amount.equals(previousNote.amount) &&
+                                                    item.done == previousNote.done)) {
 
-                                            if(item.text.equals(previousNote.text) &&
-                                                    item.amount.equals(previousNote.amount)) {
-                                                if(item.done) {
-                                                    showNotification("Вычеркнут " + '"' + item.text + '"' + " " + item.amount);
+                                                App.getInstance().getNoteDao().insert(item);
+                                                if(item.text.equals(previousNote.text) &&
+                                                        item.amount.equals(previousNote.amount)) {
+                                                    if(item.done) {
+                                                        showNotification("Вычеркнут " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
+                                                    } else {
+                                                        showNotification("Вернут " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
+                                                    }
                                                 } else {
-                                                    showNotification("Вернут " + '"' + item.text + '"' + " " + item.amount);
+                                                    showNotification("Был изменен " +
+                                                            '"' + previousNote.text + '"' + " " + previousNote.amount +
+                                                            " ---> " +
+                                                            '"' + item.text + '"' + " " + item.amount, nameOfGroup);
                                                 }
-                                            } else {
-                                                showNotification("Был изменен " +
-                                                        '"' + previousNote.text + '"' + " " + previousNote.amount +
-                                                        " ---> " +
-                                                        '"' + item.text + '"' + " " + item.amount);
                                             }
+
 
                                         });
 
                                         break;
                                 }
-                            } else {
+                            } else if(!item.author.equals(author) && exist) {
                                 switch (dc.getType()) {
                                     case REMOVED:
                                         databaseExecutor.execute(() -> {
                                             App.getInstance().getNoteDao().delete(item);
                                         });
-                                        showNotification("Был удален " + '"' + item.text + '"' + " " + item.amount);
+                                        showNotification("Был удален " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
                                         break;
                                 }
                             }
+
+
+//                            ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+//                            for (DocumentChange dc : value.getDocumentChanges()) {
+//                                Note item = dc.getDocument().toObject(Note.class);
+//                                boolean exist = adapter.is_exist(item);
+//
+//                                if (!item.author.equals(author) && !exist) {
+//                                    switch (dc.getType()) {
+//                                        case ADDED:
+//                                            databaseExecutor.execute(() -> {
+//                                                App.getInstance().getNoteDao().insert(item);
+//                                            });
+//
+//                                            showNotification("Был добавлен " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
+//                                            break;
+//                                        case MODIFIED:
+//                                            databaseExecutor.execute(() -> {
+//                                                Note previousNote = App.getInstance().getNoteDao().findById(item.uid);
+//                                                if(!(item.text.equals(previousNote.text) &&
+//                                                        item.amount.equals(previousNote.amount) &&
+//                                                        item.done == previousNote.done)) {
+//
+//                                                    App.getInstance().getNoteDao().insert(item);
+//                                                    if(item.text.equals(previousNote.text) &&
+//                                                            item.amount.equals(previousNote.amount)) {
+//                                                        if(item.done) {
+//                                                            showNotification("Вычеркнут " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
+//                                                        } else {
+//                                                            showNotification("Вернут " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
+//                                                        }
+//                                                    } else {
+//                                                        showNotification("Был изменен " +
+//                                                                '"' + previousNote.text + '"' + " " + previousNote.amount +
+//                                                                " ---> " +
+//                                                                '"' + item.text + '"' + " " + item.amount, nameOfGroup);
+//                                                    }
+//                                                }
+//
+//
+//                                            });
+//
+//                                            break;
+//                                    }
+//                                } else if(!item.author.equals(author) && exist) {
+//                                    switch (dc.getType()) {
+//                                        case REMOVED:
+//                                            databaseExecutor.execute(() -> {
+//                                                App.getInstance().getNoteDao().delete(item);
+//                                            });
+//                                            showNotification("Был удален " + '"' + item.text + '"' + " " + item.amount, nameOfGroup);
+//                                            break;
+//                                    }
+//                                }
                         }
                     databaseExecutor.shutdown();
                     }
@@ -568,6 +654,11 @@ public class MainActivity extends AppCompatActivity {
                            List<Note> doneNotes = App.getInstance().getNoteDao().getDoneNoteByGroup(currentGroup);
                             for (Note doneNote : doneNotes) {
                                 Log.d("DEL_DB", "удаляется doneNote с товаром " + doneNote.text);
+                                cloud_database.collection("Notes")
+                                        .document("groups")
+                                        .collection(currentGroup)
+                                        .document(String.valueOf(doneNote.uid))
+                                        .update("author", author);
                                 cloud_database.collection("Notes")
                                         .document("groups")
                                         .collection(currentGroup)
@@ -702,7 +793,9 @@ public class MainActivity extends AppCompatActivity {
                                     .document("groups")
                                     .collection(editNote.group)
                                     .document(String.valueOf(editNote.uid))
-                                    .update("text", editNote.text, "amount", editNote.amount);
+                                    .update("text", editNote.text,
+                                            "amount", editNote.amount,
+                                            "author", author);
 
                     dialog.dismiss();
 
@@ -755,17 +848,18 @@ public class MainActivity extends AppCompatActivity {
                             } else note.group = "";
                             note.done = false;
                             note.time = System.currentTimeMillis();
-                            note.author = "ghost";
+                            note.author = author;
                             note.uid = note.hashCode();
 
                             Map<String, Object> note1 = noteConverter(note);
 
+                            App.getInstance().getNoteDao().insert(note);
                             cloud_database.collection("Notes")
                                     .document("groups")
                                     .collection(currentGroup)
                                     .document(String.valueOf(note.uid))
                                     .set(note1);
-                            App.getInstance().getNoteDao().insert(note);
+
                         }
                     });
                     databaseExecutor.shutdown();

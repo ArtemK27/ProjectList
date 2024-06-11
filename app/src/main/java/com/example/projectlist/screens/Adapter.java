@@ -131,7 +131,6 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
 
     public void setItems(List<Note> notes) {
         sortedList.replaceAll(notes);
-
     }
     public void updateItem(int pos, Note note ) {
         sortedList.updateItemAt(pos, note);
@@ -153,8 +152,15 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
                 note.time = System.currentTimeMillis();
                 note.done = !note.done;
                 note.update_flag = "click_update";
+                note.author = MainActivity.author;
                 databaseExecutor.execute(() -> {
                     App.getInstance().getNoteDao().update(note);
+                    cloud_database
+                            .collection("Notes")
+                            .document("groups")
+                            .collection(note.group)
+                            .document(String.valueOf(note.uid))
+                            .update("author", MainActivity.author);
                     cloud_database
                             .collection("Notes")
                             .document("groups")
