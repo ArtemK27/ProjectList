@@ -31,7 +31,7 @@
             android:layout_marginTop="176dp"
             android:text="@string/add_list"
             android:textSize="15sp"
-            android:textColor="#5AC331"
+            android:textColor="@color/main_header"
             android:gravity="center_vertical"
             android:paddingLeft="20dp"
             android:textStyle="bold"/>
@@ -40,7 +40,8 @@
             android:id="@+id/names_list"
             android:layout_width="match_parent"
             android:layout_height="300dp"
-            android:layout_marginTop="236dp" />
+            android:layout_marginTop="236dp"
+            />
 
     </com.google.android.material.navigation.NavigationView>
 

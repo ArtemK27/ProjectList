@@ -2,12 +2,15 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_edit_name"
+        android:icon="@drawable/baseline_edit"
         android:title="@string/action_edit_group_name" />
     <item
         android:id="@+id/action_delete_name"
+        android:icon="@drawable/baseline_delete"
         android:title="@string/action_delete_group_name" />
     <item
         android:id="@+id/action_show_id"
+        android:icon="@drawable/baseline_share"
         android:title="@string/action_share_group"/>
 
 </menu>

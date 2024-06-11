@@ -2,9 +2,11 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_edit_item"
+        android:icon="@drawable/baseline_edit"
         android:title="Изменить" />
     <item
         android:id="@+id/action_delete_item"
+        android:icon="@drawable/baseline_delete"
         android:title="Удалить" />
 <!--    <item-->
 <!--        android:id="@+id/action_show_info"-->

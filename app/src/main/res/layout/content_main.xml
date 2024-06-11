@@ -10,7 +10,9 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/main_list"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:background="@drawable/pattern_back"
+        android:clipToPadding="false"/>
 
     <ProgressBar
         android:id="@+id/progressBarMain"

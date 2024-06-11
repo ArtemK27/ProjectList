@@ -13,6 +13,7 @@ import com.example.projectlist.model.Group;
 import java.util.List;
 
 public class GroupAdapter extends ArrayAdapter<Group> {
+    private int selectedItemPosition = 0;
     public GroupAdapter(Context context, List<Group> arr) {
         super(context, R.layout.listview_names_item, arr);
     }
@@ -20,6 +21,7 @@ public class GroupAdapter extends ArrayAdapter<Group> {
     public String getGroupId(int pos) {
         return getItem(pos).uid;
     }
+
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
@@ -32,6 +34,17 @@ public class GroupAdapter extends ArrayAdapter<Group> {
 
         ((TextView) convertView.findViewById(R.id.text_names_item)).setText(group.group);
 
+        if (position == selectedItemPosition) {
+            convertView.setBackgroundResource(R.drawable.selected_background);
+        } else {
+            convertView.setBackgroundResource(R.drawable.default_background);
+        }
+
         return convertView;
+    }
+
+    public void setSelectedItem(int position) {
+        selectedItemPosition = position;
+        notifyDataSetChanged();
     }
 }

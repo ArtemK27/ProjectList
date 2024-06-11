@@ -9,8 +9,8 @@
     <string name="menu_home">Локальный список</string>
     <string name="menu_gallery">Онлайн список</string>
     <string name="menu_slideshow">Список 3</string>
-    <string name="menu_delete">удалить купленные</string>
-    <string name="action_sync">синхронзировать</string>
+    <string name="menu_delete">Удалить купленные</string>
+    <string name="action_sync">Синхронзировать</string>
     <string name="add_list">Добавить новый список +</string>
     <string name="action_edit_group_name">Изменить</string>
     <string name="action_delete_group_name">Удалить</string>

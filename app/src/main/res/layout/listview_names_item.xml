@@ -12,4 +12,4 @@
     android:paddingRight="20dp"
     android:textSize="16sp"
     tools:text="some text for test"
-    android:textColor="#204E0F"/>
+    android:textColor="@color/black"/>

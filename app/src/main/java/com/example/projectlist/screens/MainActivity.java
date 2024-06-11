@@ -2,10 +2,14 @@ package com.example.projectlist.screens;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -36,12 +40,15 @@ import com.example.projectlist.model.Group;
 import com.example.projectlist.model.Note;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.NotificationCompat;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.drawerlayout.widget.DrawerLayout;
@@ -51,11 +58,18 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.projectlist.databinding.ActivityMainBinding;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
+import com.google.firebase.firestore.DocumentChange;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -79,8 +93,15 @@ public class MainActivity extends AppCompatActivity {
     String currentGroup = "";
     ProgressBar progressBarMain;
     List<String> allGroupNames;
+    private ListenerRegistration fireStoreListener;
 
     private FirebaseFirestore cloud_database;
+    private NotificationManager notificationManager;
+    private static final String CHANNEL_ID = "shopping_list_channel";
+    private static final String CHANNEL_NAME = "Shopping List Updates";
+    public List<Note> deleted = new LinkedList<>();
+    public List<Note> changed = new LinkedList<>();
+    public List<Note> added = new LinkedList<>();
 
     private static final String TAG = "MainActivity";
 
@@ -99,6 +120,9 @@ public class MainActivity extends AppCompatActivity {
         progressBarMain = findViewById(R.id.progressBarMain);
         listViewNames = findViewById(R.id.names_list);
 
+
+        notificationManager = (NotificationManager) getApplicationContext().getSystemService(Context.NOTIFICATION_SERVICE);
+
         NavigationView navView = findViewById(R.id.nav_view);
         //  ОБРАБОТКА НАЖАТИЯ НА КАРТИНКУ ------------------------------------------------
         ImageView imageView =  navView.getHeaderView(0).findViewById(R.id.imageView);
@@ -113,6 +137,8 @@ public class MainActivity extends AppCompatActivity {
         NavigationView navigationView = binding.navView;
 
         toolbar = findViewById(R.id.toolbar);
+        toolbar.setBackgroundColor(getColor(R.color.one_more_green));
+
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawer.addDrawerListener(toggle);
@@ -204,11 +230,15 @@ public class MainActivity extends AppCompatActivity {
                     groupAdapter = new GroupAdapter(getApplicationContext(), allGroups);
                     listViewNames.setAdapter(groupAdapter);
                     toolbar.setTitle(namesGroupDB.get(currentGroup));
+
+
                     listViewNames.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
                         @Override
                         public boolean onItemLongClick(AdapterView<?> parent, View view, final int position, long id) {
                             PopupMenu popupMenu = new PopupMenu(getApplicationContext(), view);
                             popupMenu.inflate(R.menu.context_menu_for_lists);
+
+                            popupMenu.setForceShowIcon(true);
                             popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
                                 @Override
                                 public boolean onMenuItemClick(MenuItem item) {
@@ -222,6 +252,7 @@ public class MainActivity extends AppCompatActivity {
                                             Group newGroup = allGroups.get(0);
                                             currentGroup = newGroup.uid;
                                             mainViewModel.setFilter(currentGroup);
+                                            setFireStoreListener(currentGroup);
                                             toolbar.setTitle(newGroup.group);
 
                                         } else {
@@ -232,6 +263,7 @@ public class MainActivity extends AppCompatActivity {
                                         }
                                         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
                                         databaseExecutor.execute(() -> App.getInstance().getNoteDao().deleteName(group.uid));
+                                        databaseExecutor.shutdown();
                                         return true;
                                     }
 
@@ -276,12 +308,15 @@ public class MainActivity extends AppCompatActivity {
 
                     LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getApplicationContext(), RecyclerView.VERTICAL, false);
                     recyclerView.setLayoutManager(linearLayoutManager);
-                    recyclerView.addItemDecoration(new DividerItemDecoration(getApplicationContext(), DividerItemDecoration.VERTICAL));
+                    DividerItemDecoration dividerItemDecoration = new DividerItemDecoration(getApplicationContext(), DividerItemDecoration.VERTICAL);
+                    dividerItemDecoration.setDrawable(getResources().getDrawable(R.drawable.recycleview_divider));
+                    recyclerView.addItemDecoration(dividerItemDecoration);
                     recyclerView.setAdapter(adapter);
 
 
 
                     mainViewModel.setFilter(currentGroup);
+                    setFireStoreListener(currentGroup);
                     LiveData<List<Note>> liveNotes = mainViewModel.getLiveDataByGroup();
                     liveNotes.observe(MainActivity.this, notes -> {
 //                            adapter.setItems(null);
@@ -296,6 +331,7 @@ public class MainActivity extends AppCompatActivity {
 
                         PopupMenu popupMenu = new PopupMenu(getApplicationContext(), view);
                         popupMenu.inflate(R.menu.context_menu_item);
+                        popupMenu.setForceShowIcon(true);
                         popupMenu.setOnMenuItemClickListener(item -> {
                             int id = item.getItemId();
                             if(id == R.id.action_delete_item) {
@@ -341,6 +377,9 @@ public class MainActivity extends AppCompatActivity {
 
         update_lists();
 
+
+
+
         listViewNames.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -350,15 +389,116 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 mainViewModel.setFilter(currentGroup);
+                setFireStoreListener(currentGroup);
                 toolbar.setTitle(group.group);
+                groupAdapter.setSelectedItem(position);
                 drawer.close();
             }
         });
 
+
+
+    }
+
+    public void showNotification(String msg) {
+
+        Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(getApplicationContext(), 0, intent,  PendingIntent.FLAG_IMMUTABLE);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
+                .setContentIntent(pendingIntent)
+                .setSmallIcon(R.drawable.cart_icon)
+                .setTicker("Новое уведомление")
+                .setWhen(System.currentTimeMillis())
+                .setAutoCancel(true)
+                .setContentTitle("Quick cart")
+                .setContentText(msg);
+
+        int notificationId = (int) System.currentTimeMillis();
+        notificationManager.notify(notificationId, builder.build());
     }
 
 
-    // обнловление списка списков магазинов
+
+    private void setFireStoreListener(String id) {
+        if (id == "" || id == null) {
+            return;
+        }
+        if (fireStoreListener != null) {
+            fireStoreListener.remove();
+        }
+
+
+        fireStoreListener = cloud_database
+                .collection("Notes")
+                .document("groups")
+                .collection(id)
+                .addSnapshotListener(new EventListener<QuerySnapshot>() {
+                    @Override
+                    public void onEvent(@Nullable QuerySnapshot value, @Nullable FirebaseFirestoreException error) {
+                        if (error != null) {
+                            Log.w("Firestore", "Listen failed.", error);
+                            return;
+                        }
+                        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+                        for (DocumentChange dc : value.getDocumentChanges()) {
+                            Note item = dc.getDocument().toObject(Note.class);
+                            boolean exist = adapter.is_exist(item);
+
+                            if (!exist) {
+                                switch (dc.getType()) {
+                                    case ADDED:
+                                        databaseExecutor.execute(() -> {
+                                            App.getInstance().getNoteDao().insert(item);
+                                        });
+                                        showNotification("Был добавлен " + '"' + item.text + '"' + " " + item.amount);
+                                        break;
+                                    case MODIFIED:
+                                        databaseExecutor.execute(() -> {
+                                            Note previousNote = App.getInstance().getNoteDao().findById(item.uid);
+                                            App.getInstance().getNoteDao().insert(item);
+
+                                            if(item.text.equals(previousNote.text) &&
+                                                    item.amount.equals(previousNote.amount)) {
+                                                if(item.done) {
+                                                    showNotification("Вычеркнут " + '"' + item.text + '"' + " " + item.amount);
+                                                } else {
+                                                    showNotification("Вернут " + '"' + item.text + '"' + " " + item.amount);
+                                                }
+                                            } else {
+                                                showNotification("Был изменен " +
+                                                        '"' + previousNote.text + '"' + " " + previousNote.amount +
+                                                        " ---> " +
+                                                        '"' + item.text + '"' + " " + item.amount);
+                                            }
+
+                                        });
+
+                                        break;
+                                }
+                            } else {
+                                switch (dc.getType()) {
+                                    case REMOVED:
+                                        databaseExecutor.execute(() -> {
+                                            App.getInstance().getNoteDao().delete(item);
+                                        });
+                                        showNotification("Был удален " + '"' + item.text + '"' + " " + item.amount);
+                                        break;
+                                }
+                            }
+                        }
+                    databaseExecutor.shutdown();
+                    }
+                });
+    }
+
+    // обновление списка списков магазинов
     public void update_lists() {
 
         ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
@@ -419,7 +559,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-
                 int id = item.getItemId();
                 if(id == R.id.action_delete) {
                    ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
@@ -442,34 +581,12 @@ public class MainActivity extends AppCompatActivity {
                     databaseExecutor.shutdown();
 
                 }
-                if(id == R.id.action_sync){
-                    syncAddNotes();
-                }
-//                if(id == R.id.action_updateclick) {
-//                    syncDoneNotes();
+//                if(id == R.id.action_sync){
+//                    syncAddNotes();
 //                }
-
         return super.onOptionsItemSelected(item);
     }
 
-//    void syncDoneNotes() {
-//        ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
-//        databaseExecutor.execute(new Runnable() {
-//            @Override
-//            public void run() {
-//                List<Note> clickatedNotes = App.getInstance().getNoteDao().getClickatedNotes();
-//                for(Note curNote : clickatedNotes) {
-//                    cloud_database
-//                            .collection("Notes")
-//                            .document("groups")
-//                            .collection(curNote.group)
-//                            .document(String.valueOf(curNote.uid))
-//                            .update("done", curNote.done);
-//                }
-//                App.getInstance().getNoteDao().clearClickatedNotes();
-//            }
-//        });
-//    }
     void syncAddNotes() {
                 Log.d(TAG, "sync begin");
                 for(String idGroup : namesGroupDB.keySet()) {
@@ -765,10 +882,12 @@ public class MainActivity extends AppCompatActivity {
         final Dialog dialog = new Dialog(this);
         dialog.setContentView(R.layout.dialog_add_list_layout);
         dialog.show();
-        final EditText editText = dialog.findViewById(R.id.add_new_list);
+        final TextInputEditText editText = dialog.findViewById(R.id.add_new_list);
         editText.setText(group.group);
-        LinearLayout linearLayout = dialog.findViewById(R.id.layout_button);
-        linearLayout.setOnClickListener(new View.OnClickListener() {
+        MaterialButton materialButton = dialog.findViewById(R.id.confirm_button);
+        materialButton.setText("Сохранить");
+        materialButton.setIcon(getDrawable(R.drawable.baseline_check_24));
+        materialButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 String listName = editText.getText().toString();
@@ -815,14 +934,14 @@ public class MainActivity extends AppCompatActivity {
         final Dialog dialog = new Dialog(this);
         dialog.setContentView(R.layout.dialog_add_list_layout);
         dialog.show();
-        final EditText editText = dialog.findViewById(R.id.add_new_list);
+        final TextInputEditText editText = dialog.findViewById(R.id.add_new_list);
         final ProgressBar progressBar = dialog.findViewById(R.id.progressBar);
+        final MaterialButton materialButton = dialog.findViewById(R.id.confirm_button);
         Animation animate;
         animate = AnimationUtils.loadAnimation(MainActivity.this, R.anim.progress_animate);
         progressBar.setVisibility(View.INVISIBLE);
 
-        LinearLayout linearLayout = dialog.findViewById(R.id.layout_button);
-        linearLayout.setOnClickListener(v -> {
+        materialButton.setOnClickListener(v -> {
             String listName = editText.getText().toString().trim();
 
             if(!listName.equals("") && !namesGroupDB.containsValue(listName)) {

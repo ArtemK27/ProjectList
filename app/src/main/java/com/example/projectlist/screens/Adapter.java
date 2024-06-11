@@ -28,6 +28,21 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
     private FirebaseFirestore cloud_database;
 
     ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+
+    public boolean is_exist (Note checkNote) {
+        for (int i = 0; i < sortedList.size(); i++) {
+            Note note = sortedList.get(i);
+            if (!(note.uid == checkNote.uid)) continue;
+            if (!note.text.equals(checkNote.text)) continue;
+            if (!note.done == checkNote.done) continue;
+            if (!note.amount.equals(checkNote.amount)) continue;
+            if (!note.group.equals(checkNote.group)) continue;
+            return true;
+        }
+
+        return false;
+    };
+
     public Adapter() {
         cloud_database = FirebaseFirestore.getInstance();
         sortedList = new SortedList<>(Note.class, new SortedList.Callback<Note>() {
@@ -167,14 +182,14 @@ public class Adapter extends RecyclerView.Adapter<Adapter.NoteViewHolder> {
         private void updateStrokeOut() {
             if (note.done) {
                 noteText.setPaintFlags(noteText.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                noteText.setBackgroundColor(Color.argb(180,211,211,211));
+                noteText.setBackgroundColor(Color.argb(180,127,127,127));
                 noteAmount.setPaintFlags(noteText.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                noteAmount.setBackgroundColor(Color.argb(180,211,211,211));
+                noteAmount.setBackgroundColor(Color.argb(180,127,127,127));
             } else {
                 noteText.setPaintFlags(noteText.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-                noteText.setBackgroundColor(Color.TRANSPARENT);
+                noteText.setBackgroundResource(R.drawable.default_background);
                 noteAmount.setPaintFlags(noteText.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-                noteAmount.setBackgroundColor(Color.TRANSPARENT);
+                noteAmount.setBackgroundResource(R.drawable.default_background);
             }
         }
     }
