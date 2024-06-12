@@ -389,6 +389,12 @@ public class MainActivity extends AppCompatActivity {
                 } else if(msg.arg1 == -1) {
                     floatingActionButton.setVisibility(View.INVISIBLE);
                     toolbar.setTitle("Создайте новый список");
+                } else if(msg.arg1 > 1){
+                    mainViewModel.setFilter(currentGroup);
+                    setFireStoreListener(currentGroup);
+                    toolbar.setTitle(namesGroupDB.get(currentGroup));
+                    groupAdapter.setSelectedItem(msg.arg1-2);
+                    syncAddNotes(currentGroup);
                 }
 
             }
@@ -724,6 +730,52 @@ public class MainActivity extends AppCompatActivity {
                 }
 
     }
+    void syncAddNotes(String idGroup) {
+        Log.d(TAG, "sync begin");
+        Log.i("SyncGroup", "group =  " + idGroup);
+        cloud_database
+                .collection("Notes")
+                .document("groups")
+                .collection(idGroup)
+                .get()
+                .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
+                    @Override
+                    public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                        if (task.isSuccessful()) {
+                            ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
+                            databaseExecutor.execute(new Runnable() {
+
+                                @Override
+                                public void run() {
+//                                                App.getInstance().getNoteDao().clearSync();
+                                    for (QueryDocumentSnapshot document : task.getResult()) {
+                                        Map<String, Object> cloud_note = document.getData();
+                                        Note local_note = new Note();
+                                        local_note.uid = Long.valueOf(cloud_note.get("uid").toString()).intValue();
+                                        local_note.time = Long.valueOf(cloud_note.get("time").toString()).intValue();
+                                        local_note.text = (String) cloud_note.get("text");
+                                        local_note.done = (boolean) cloud_note.get("done");
+                                        local_note.amount = (String) cloud_note.get("amount");
+                                        local_note.group = (String) cloud_note.get("group");
+                                        local_note.author = (String) cloud_note.get("author");
+                                        local_note.sync = 1;
+                                        App.getInstance().getNoteDao().insert(local_note);
+                                        Log.d("AddDocument", "succeful");
+                                        Log.d("AddDocument", document.getId() + " => " + document.getData().get("text"));
+                                    }
+                                    App.getInstance().getNoteDao().deleteSyncByGroup(idGroup);
+                                }
+                            });
+                            databaseExecutor.shutdown();
+                        } else {
+                            Log.d("AddDocument", "Error getting documents: ", task.getException());
+                        }
+                    }
+                });
+
+    }
+
+
 //    @Override
 //    public boolean onSupportNavigateUp() {
 //        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
@@ -919,10 +971,16 @@ public class MainActivity extends AppCompatActivity {
                         Message msg = new Message();
                         msg.arg1 = 1;
                         handler.sendMessage(msg);
+                        namesGroupDB.put(group.uid, group.group);
                     } else {
+                        currentGroup = group.uid;
                         allGroups.add(group);
+                        namesGroupDB.put(group.uid, group.group);
+                        Message msg = new Message();
+                        msg.arg1 = allGroups.indexOf(group) + 2;
+                        handler.sendMessage(msg);
                     }
-                    namesGroupDB.put(group.uid, group.group);
+
                 }
 
                 Map<String, Object> NewGroup1 = new HashMap<>();

@@ -13,7 +13,7 @@ import com.example.projectlist.model.Group;
 import java.util.List;
 
 public class GroupAdapter extends ArrayAdapter<Group> {
-    private int selectedItemPosition = 0;
+    int selectedItemPosition = 0;
     public GroupAdapter(Context context, List<Group> arr) {
         super(context, R.layout.listview_names_item, arr);
     }
